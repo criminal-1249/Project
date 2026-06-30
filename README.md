@@ -30,64 +30,62 @@ Output CSVs are written to `./output/`.
 
 ---
 
-## Fixes Applied (v2)
-
-### Fix 1 – Target Labels
+### Target Labels
 - `future_fault_type` contains only clean fault class names (no `recovery_*` prefix)
 - Added `network_state` column: `normal | degrading | fault | recovery`
 - Recovery rows: `future_fault_type=normal`, `network_state=recovery`
 
-### Fix 2 – Precursor / Early Warning Behaviour
+### Precursor / Early Warning Behaviour
 - Gradual ramp of latency, jitter, utilization, packet_loss before every fault
 - Routing instability signals (BGP/OSPF events) grow during precursor phase
 - Tunnel degradation metrics rise before tunnel_failure
 - Model can learn: normal → warning signs → degradation → fault → recovery
 
-### Fix 3 – time_to_impact_minutes
+### time_to_impact_minutes
 - Counts **down** to the fault (e.g. 10 → 5 → 0)
 - Value = minutes until the fault enters its active phase
 - During active phase: 0
 - During recovery / normal: 0
 
-### Fix 4 – Severity Distribution
+### Severity Distribution
 - Targets: low ~50% | medium ~25% | high ~15% | critical ~10%
 - Severity is now phase- and depth-aware (not just fault-type-based)
 - Precursor → low/medium; active → high/critical; recovery → medium
 
-### Fix 5 – Affected Service Realism
+### Affected Service Realism
 - `tunnel_failure` / `tunnel_rekey_storm` → VOICE, ERP, DATABASE
 - `congestion` (datacenter) → DATABASE, ERP
 - `link_failure` / `link_degradation` → VOICE, ERP, WEB
 - `bgp_flap` / `bgp_hijack` → ERP, DATABASE
 
-### Fix 6 – fault_id Column
+### fault_id Column
 - Added `fault_id` (e.g. `F001`, `F002`) to `ml_features.csv` and `fault_labels.csv`
 - Groups all rows belonging to the same fault event
 
-### Fix 7 – recovery_time_minutes Column
+### recovery_time_minutes Column
 - Added `recovery_time_minutes` to `ml_features.csv` and `fault_labels.csv`
 - Measures minutes the network takes to recover after a fault
 
-### Fix 8 – Class Distribution Balance
+### Class Distribution Balance
 - All 9 fault types guaranteed to appear
 - Normal ratio: 30–40% | Fault/predictive: 60–70%
 
-### Fix 9 – Time-Series Train/Test Split
+### Time-Series Train/Test Split
 - Subsampling preserves temporal order (no random shuffle)
 - Use time-based split: first 70% train / next 15% val / last 15% test
 - Prevents data leakage from future rows into training
 
 ---
 
-## Fixes Applied (v4 — Round 3: Class Balance & Row Count)
+## Class Balance & Row Count
 
 The Round 2 dataset (v3) actually **overshot** the fault/predictive target —
 71 fault scenarios at 30–90 min duration covered so much of the 7-day
 timeline that normal traffic dropped to ~21%, well below the 30–40% target,
 and the final file shipped only ~43,680 rows instead of the advertised
-50,000. Round 3 fixes both issues.
+50,000.
 
-### Fix 10 – Class Balance Correction
+### Class Balance Correction
 - A literal "120–150 scenarios at 30–90 min duration + 30–60 min precursor"
   target is **geometrically infeasible** for a 10,080-minute window with
   non-overlapping faults — those footprints alone exceed the entire
@@ -100,12 +98,12 @@ and the final file shipped only ~43,680 rows instead of the advertised
 - Result: **normal ≈ 32%**, **fault/predictive ≈ 68%** — inside the
   30–40% / 60–70% validated target band.
 
-### Fix 11 – Raw Row Count / Padding Bug
+### Raw Row Count / Padding Bug
 - Row generation sampled **4–5 devices per minute** (alternating, ~4.33
   avg), producing only ~43,680 raw rows over the 10,080-minute window —
   always short of `TARGET_SAMPLES=50,000`.
-- The shortfall was "fixed" by tiling exact-duplicate rows to pad up to
-  50,000 — but `step_05`'s `drop_duplicates()` step then removed every
+- The shortfall was fixed by tiling exact-duplicate rows to pad up to
+  50,000 — but  `drop_duplicates()` step then removed every
   tiled duplicate, silently shipping ~43,680 rows instead of 50,000.
 - Fix: sample a flat **5 devices/minute**, yielding 10,080 × 5 = **50,400**
   raw rows — already above target, so no padding or duplicate-tiling is
